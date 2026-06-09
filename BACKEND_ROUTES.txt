@@ -1,0 +1,364 @@
+# Complete Backend Routes for New Features
+# Add this to app/routes.py
+
+from flask import Blueprint, render_template, request, jsonify, redirect, url_for, flash, send_file
+from flask_login import login_required, current_user
+from app import db
+from app.models import (
+    User, Product, Customer, Invoice, InvoiceItem,
+    Quotation, QuotationItem, PurchaseOrder, PurchaseOrderItem,
+    Supplier, SystemLog
+)
+from app.pdf_generator import InvoicePDFGenerator
+from datetime import datetime, timedelta
+from sqlalchemy import func
+import os
+
+# ==================== QUOTATION ROUTES ====================
+
+quotation_bp = Blueprint('quotation', __name__, url_prefix='/quotation')
+
+@quotation_bp.route('/list')
+@login_required
+def list_quotations():
+    page = request.args.get('page', 1, type=int)
+    quotations = Quotation.query.order_by(Quotation.created_at.desc()).paginate(page=page, per_page=20)
+    return render_template('quotations.html', quotations=quotations)
+
+@quotation_bp.route('/create', methods=['GET', 'POST'])
+@login_required
+def create_quotation():
+    if request.method == 'POST':
+        try:
+            customer_id = request.form.get('customer_id')
+            customer_name = request.form.get('customer_name')
+            quotation_date = datetime.strptime(request.form.get('quotation_date'), '%Y-%m-%d')
+            valid_until = datetime.strptime(request.form.get('valid_until'), '%Y-%m-%d')
+            tax_percent = float(request.form.get('tax_percent', 0))
+            discount_amount = float(request.form.get('discount_amount', 0))
+            notes = request.form.get('notes', '')
+            action = request.form.get('action', 'save_draft')
+            
+            quotation_number = f"QT-{datetime.utcnow().strftime('%Y%m%d%H%M%S')}"
+            
+            quotation = Quotation(
+                quotation_number=quotation_number,
+                customer_id=customer_id,
+                customer_name=customer_name,
+                quotation_date=quotation_date,
+                valid_until=valid_until,
+                tax_percent=tax_percent,
+                discount_amount=discount_amount,
+                notes=notes,
+                status='draft' if action == 'save_draft' else 'sent',
+                created_by=current_user.id
+            )
+            
+            items_data = request.form.getlist('item_product_id')
+            quantities = request.form.getlist('item_quantity')
+            
+            subtotal = 0
+            for product_id, quantity in zip(items_data, quantities):
+                if not product_id or not quantity:
+                    continue
+                
+                quantity = int(quantity)
+                product = Product.query.get(product_id)
+                
+                item_price = product.selling_price
+                item_total = quantity * item_price
+                
+                quotation_item = QuotationItem(
+                    product_id=product_id,
+                    product_name=product.name,
+                    quantity=quantity,
+                    unit_price=item_price,
+                    total_amount=item_total
+                )
+                
+                quotation.items.append(quotation_item)
+                subtotal += item_total
+            
+            quotation.subtotal = subtotal
+            quotation.tax_amount = subtotal * (tax_percent / 100)
+            quotation.total_amount = subtotal + quotation.tax_amount - discount_amount
+            
+            db.session.add(quotation)
+            db.session.commit()
+            
+            flash(f'Quotation {quotation_number} created successfully', 'success')
+            return redirect(url_for('quotation.view_quotation', quotation_id=quotation.id))
+        
+        except Exception as e:
+            db.session.rollback()
+            flash(f'Error creating quotation: {str(e)}', 'danger')
+    
+    customers = Customer.query.filter_by(is_active=True).all()
+    products = Product.query.filter_by(is_active=True).all()
+    today = datetime.now().strftime('%Y-%m-%d')
+    
+    return render_template('create_quotation.html', customers=customers, products=products, today=today)
+
+@quotation_bp.route('/view/<quotation_id>')
+@login_required
+def view_quotation(quotation_id):
+    quotation = Quotation.query.get_or_404(quotation_id)
+    return render_template('view_quotation.html', quotation=quotation)
+
+@quotation_bp.route('/export-pdf/<quotation_id>')
+@login_required
+def export_quotation_pdf(quotation_id):
+    quotation = Quotation.query.get_or_404(quotation_id)
+    
+    company_info = {
+        'name': 'Medical Store',
+        'address': 'Your Address',
+        'phone': '+91-XXXX-XXXX-XXXX',
+        'email': 'info@medicalstore.com',
+        'gst': 'GST Number'
+    }
+    
+    pdf_gen = InvoicePDFGenerator(company_info)
+    filename = f"Quotation_{quotation.quotation_number}.pdf"
+    filepath = pdf_gen.generate_quotation_pdf(quotation, filename)
+    
+    return send_file(filepath, as_attachment=True, mimetype='application/pdf')
+
+# ==================== PURCHASE ORDER ROUTES ====================
+
+purchase_bp = Blueprint('purchase', __name__, url_prefix='/purchase')
+
+@purchase_bp.route('/list')
+@login_required
+def list_orders():
+    page = request.args.get('page', 1, type=int)
+    purchase_orders = PurchaseOrder.query.order_by(PurchaseOrder.created_at.desc()).paginate(page=page, per_page=20)
+    suppliers = Supplier.query.filter_by(is_active=True).all()
+    return render_template('purchase_orders.html', purchase_orders=purchase_orders, suppliers=suppliers)
+
+@purchase_bp.route('/create', methods=['GET', 'POST'])
+@login_required
+def create_order():
+    if request.method == 'POST':
+        try:
+            supplier_id = request.form.get('supplier_id')
+            supplier_name = request.form.get('supplier_name')
+            po_date = datetime.strptime(request.form.get('po_date'), '%Y-%m-%d')
+            expected_delivery = datetime.strptime(request.form.get('expected_delivery'), '%Y-%m-%d')
+            tax_percent = float(request.form.get('tax_percent', 0))
+            shipping_cost = float(request.form.get('shipping_cost', 0))
+            notes = request.form.get('notes', '')
+            action = request.form.get('action', 'save_draft')
+            
+            po_number = f"PO-{datetime.utcnow().strftime('%Y%m%d%H%M%S')}"
+            
+            purchase_order = PurchaseOrder(
+                po_number=po_number,
+                supplier_id=supplier_id,
+                supplier_name=supplier_name,
+                po_date=po_date,
+                expected_delivery=expected_delivery,
+                tax_percent=tax_percent,
+                shipping_cost=shipping_cost,
+                notes=notes,
+                status='draft' if action == 'save_draft' else 'sent',
+                created_by=current_user.id
+            )
+            
+            items_data = request.form.getlist('item_product_id')
+            quantities = request.form.getlist('item_quantity')
+            prices = request.form.getlist('item_price')
+            
+            subtotal = 0
+            for product_id, quantity, price in zip(items_data, quantities, prices):
+                if not product_id or not quantity or not price:
+                    continue
+                
+                quantity = int(quantity)
+                price = float(price)
+                product = Product.query.get(product_id)
+                
+                item_total = quantity * price
+                
+                po_item = PurchaseOrderItem(
+                    product_id=product_id,
+                    product_name=product.name,
+                    quantity=quantity,
+                    unit_price=price,
+                    total_amount=item_total
+                )
+                
+                purchase_order.items.append(po_item)
+                subtotal += item_total
+            
+            purchase_order.subtotal = subtotal
+            purchase_order.tax_amount = subtotal * (tax_percent / 100)
+            purchase_order.total_amount = subtotal + purchase_order.tax_amount + shipping_cost
+            
+            db.session.add(purchase_order)
+            db.session.commit()
+            
+            flash(f'Purchase Order {po_number} created successfully', 'success')
+            return redirect(url_for('purchase.view_order', order_id=purchase_order.id))
+        
+        except Exception as e:
+            db.session.rollback()
+            flash(f'Error creating purchase order: {str(e)}', 'danger')
+    
+    suppliers = Supplier.query.filter_by(is_active=True).all()
+    products = Product.query.filter_by(is_active=True).all()
+    today = datetime.now().strftime('%Y-%m-%d')
+    
+    return render_template('create_purchase_order.html', suppliers=suppliers, products=products, today=today)
+
+@purchase_bp.route('/view/<order_id>')
+@login_required
+def view_order(order_id):
+    purchase_order = PurchaseOrder.query.get_or_404(order_id)
+    return render_template('view_purchase_order.html', purchase_order=purchase_order)
+
+# ==================== ADMIN ROUTES ====================
+
+admin_bp = Blueprint('admin', __name__, url_prefix='/admin')
+
+@admin_bp.route('/dashboard')
+@login_required
+def admin_dashboard():
+    if current_user.role != 'admin':
+        flash('Access denied', 'danger')
+        return redirect(url_for('main.dashboard'))
+    
+    users = User.query.all()
+    suppliers = Supplier.query.all()
+    
+    total_users = len(users)
+    admin_count = len([u for u in users if u.role == 'admin'])
+    active_users = len([u for u in users if u.is_active])
+    
+    db_size = os.path.getsize('medical_store.db') / (1024 * 1024) if os.path.exists('medical_store.db') else 0
+    
+    # Get backup files
+    backup_files = []
+    if os.path.exists('backups'):
+        for file in os.listdir('backups'):
+            filepath = os.path.join('backups', file)
+            backup_files.append({
+                'name': file,
+                'created': datetime.fromtimestamp(os.path.getctime(filepath)).strftime('%d-%m-%Y %H:%M'),
+                'size': f"{os.path.getsize(filepath) / (1024*1024):.2f} MB"
+            })
+    
+    system_logs = SystemLog.query.order_by(SystemLog.created_at.desc()).limit(50).all()
+    
+    return render_template('admin_dashboard.html',
+                         users=users,
+                         suppliers=suppliers,
+                         total_users=total_users,
+                         admin_count=admin_count,
+                         active_users=active_users,
+                         db_size=f"{db_size:.2f}",
+                         backup_files=backup_files,
+                         system_logs=system_logs)
+
+@admin_bp.route('/add-user', methods=['POST'])
+@login_required
+def add_user():
+    if current_user.role != 'admin':
+        return jsonify({'error': 'Unauthorized'}), 403
+    
+    try:
+        username = request.form.get('username')
+        email = request.form.get('email')
+        password = request.form.get('password')
+        role = request.form.get('role', 'staff')
+        
+        if User.query.filter_by(username=username).first():
+            flash('Username already exists', 'danger')
+            return redirect(url_for('admin.admin_dashboard'))
+        
+        user = User(username=username, email=email, role=role)
+        user.set_password(password)
+        
+        db.session.add(user)
+        db.session.commit()
+        
+        # Log action
+        log = SystemLog(user_name=current_user.username, action='User Created', details=f'Created user: {username}')
+        db.session.add(log)
+        db.session.commit()
+        
+        flash(f'User {username} created successfully', 'success')
+    except Exception as e:
+        flash(f'Error: {str(e)}', 'danger')
+    
+    return redirect(url_for('admin.admin_dashboard'))
+
+@admin_bp.route('/toggle-user/<user_id>', methods=['POST'])
+@login_required
+def toggle_user(user_id):
+    if current_user.role != 'admin':
+        return jsonify({'error': 'Unauthorized'}), 403
+    
+    user = User.query.get(user_id)
+    if user:
+        user.is_active = not user.is_active
+        db.session.commit()
+        
+        status = 'activated' if user.is_active else 'deactivated'
+        log = SystemLog(user_name=current_user.username, action='User Modified', details=f'User {status}: {user.username}')
+        db.session.add(log)
+        db.session.commit()
+    
+    return jsonify({'success': True})
+
+@admin_bp.route('/delete-user/<user_id>', methods=['POST'])
+@login_required
+def delete_user(user_id):
+    if current_user.role != 'admin' or user_id == current_user.id:
+        return jsonify({'error': 'Unauthorized'}), 403
+    
+    user = User.query.get(user_id)
+    if user:
+        username = user.username
+        db.session.delete(user)
+        db.session.commit()
+        
+        log = SystemLog(user_name=current_user.username, action='User Deleted', details=f'Deleted user: {username}')
+        db.session.add(log)
+        db.session.commit()
+    
+    return jsonify({'success': True})
+
+@admin_bp.route('/backup-database', methods=['POST'])
+@login_required
+def backup_database():
+    if current_user.role != 'admin':
+        return jsonify({'error': 'Unauthorized'}), 403
+    
+    try:
+        os.makedirs('backups', exist_ok=True)
+        backup_file = f"backups/backup_{datetime.now().strftime('%Y%m%d_%H%M%S')}.db"
+        
+        import shutil
+        shutil.copy('medical_store.db', backup_file)
+        
+        log = SystemLog(user_name=current_user.username, action='Backup Created', details=f'Database backup: {backup_file}')
+        db.session.add(log)
+        db.session.commit()
+        
+        return jsonify({'success': True, 'message': 'Backup created successfully'})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@admin_bp.route('/clear-logs', methods=['POST'])
+@login_required
+def clear_logs():
+    if current_user.role != 'admin':
+        return jsonify({'error': 'Unauthorized'}), 403
+    
+    try:
+        SystemLog.query.delete()
+        db.session.commit()
+        return jsonify({'success': True})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
