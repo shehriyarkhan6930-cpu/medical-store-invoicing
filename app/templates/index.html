@@ -1,0 +1,98 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard - Medical Store Invoicing System{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-md-12">
+        <h1 class="mb-0">Dashboard</h1>
+        <p class="text-muted">Welcome back, {{ current_user.username }}!</p>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-3 mb-4">
+        <div class="card bg-primary text-white">
+            <div class="card-body">
+                <h5 class="card-title"><i class="fas fa-pills"></i> Total Products</h5>
+                <h2>{{ stats.total_products }}</h2>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3 mb-4">
+        <div class="card bg-success text-white">
+            <div class="card-body">
+                <h5 class="card-title"><i class="fas fa-users"></i> Total Customers</h5>
+                <h2>{{ stats.total_customers }}</h2>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3 mb-4">
+        <div class="card bg-info text-white">
+            <div class="card-body">
+                <h5 class="card-title"><i class="fas fa-receipt"></i> Total Invoices</h5>
+                <h2>{{ stats.total_invoices }}</h2>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3 mb-4">
+        <div class="card bg-warning text-white">
+            <div class="card-body">
+                <h5 class="card-title"><i class="fas fa-money-bill-wave"></i> Today's Sales</h5>
+                <h2>₹{{ "%.2f"|format(stats.today_sales) }}</h2>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-6 mb-4">
+        <div class="card border-danger">
+            <div class="card-header bg-danger text-white">
+                <i class="fas fa-exclamation-triangle"></i> Low Stock Items
+            </div>
+            <div class="card-body">
+                <h3 class="text-danger">{{ stats.low_stock_items }}</h3>
+                <p class="text-muted mb-0">Items with quantity ≤ 10</p>
+                <a href="{{ url_for('inventory.list_products') }}" class="btn btn-sm btn-danger mt-2">View Details</a>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6 mb-4">
+        <div class="card border-warning">
+            <div class="card-header bg-warning text-dark">
+                <i class="fas fa-calendar-alt"></i> Expiring Soon
+            </div>
+            <div class="card-body">
+                <h3 class="text-warning">{{ stats.expiring_items }}</h3>
+                <p class="text-muted mb-0">Items expiring within 30 days</p>
+                <a href="{{ url_for('report.inventory_report') }}" class="btn btn-sm btn-warning mt-2">View Details</a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mt-4">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">Quick Actions</h5>
+            </div>
+            <div class="card-body">
+                <a href="{{ url_for('invoice.create_invoice') }}" class="btn btn-primary me-2 mb-2">
+                    <i class="fas fa-plus"></i> Create Invoice
+                </a>
+                <a href="{{ url_for('inventory.add_product') }}" class="btn btn-success me-2 mb-2">
+                    <i class="fas fa-plus"></i> Add Product
+                </a>
+                <a href="{{ url_for('customer.add_customer') }}" class="btn btn-info me-2 mb-2">
+                    <i class="fas fa-plus"></i> Add Customer
+                </a>
+                <a href="{{ url_for('report.sales_report') }}" class="btn btn-warning me-2 mb-2">
+                    <i class="fas fa-chart-bar"></i> View Reports
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
