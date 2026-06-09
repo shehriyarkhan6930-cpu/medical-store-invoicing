@@ -1,0 +1,222 @@
+{% extends "base.html" %}
+
+{% block title %}Create Quotation - Medical Store Invoicing System{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-md-8">
+        <h1>Create Quotation</h1>
+    </div>
+    <div class="col-md-4 text-end">
+        <a href="{{ url_for('quotation.list_quotations') }}" class="btn btn-secondary">
+            <i class="fas fa-arrow-left"></i> Back
+        </a>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">Quotation Details</h5>
+            </div>
+            <div class="card-body">
+                <form method="POST" id="quotationForm">
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label for="customer_id" class="form-label">Customer <span class="text-danger">*</span></label>
+                            <select class="form-control" id="customer_id" name="customer_id" required onchange="loadCustomerDetails()">
+                                <option value="">-- Select Customer --</option>
+                                {% for customer in customers %}
+                                <option value="{{ customer.id }}">{{ customer.name }} ({{ customer.phone }})</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="customer_name" class="form-label">Customer Name</label>
+                            <input type="text" class="form-control" id="customer_name" name="customer_name" readonly>
+                        </div>
+                    </div>
+
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label for="quotation_date" class="form-label">Quotation Date</label>
+                            <input type="date" class="form-control" id="quotation_date" name="quotation_date" value="{{ today }}" required>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="valid_until" class="form-label">Valid Until</label>
+                            <input type="date" class="form-control" id="valid_until" name="valid_until" required>
+                        </div>
+                    </div>
+
+                    <div class="row mb-3">
+                        <div class="col-md-12">
+                            <label class="form-label">Items <span class="text-danger">*</span></label>
+                            <div id="quotation-items">
+                                <div class="row mb-2 quotation-item-row">
+                                    <div class="col-md-5">
+                                        <select class="form-control item-product" name="item_product_id" onchange="updateItemPrice(this)" required>
+                                            <option value="">-- Select Product --</option>
+                                            {% for product in products %}
+                                            <option value="{{ product.id }}" data-price="{{ product.selling_price }}">{{ product.name }} ({{ product.sku }})</option>
+                                            {% endfor %}
+                                        </select>
+                                    </div>
+                                    <div class="col-md-2">
+                                        <input type="number" class="form-control" name="item_quantity" placeholder="Qty" min="1" value="1" onchange="calculateTotal()">
+                                    </div>
+                                    <div class="col-md-3">
+                                        <input type="number" class="form-control" name="item_price" placeholder="Price" step="0.01" readonly>
+                                    </div>
+                                    <div class="col-md-2">
+                                        <button type="button" class="btn btn-sm btn-danger" onclick="removeQuotationRow(this)">
+                                            <i class="fas fa-trash"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                            <button type="button" class="btn btn-sm btn-success mt-2" onclick="addQuotationRow()">
+                                <i class="fas fa-plus"></i> Add Row
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label for="tax_percent" class="form-label">Tax %</label>
+                            <input type="number" class="form-control" id="tax_percent" name="tax_percent" value="0" step="0.01" onchange="calculateTotal()">
+                        </div>
+                        <div class="col-md-6">
+                            <label for="discount_amount" class="form-label">Discount Amount</label>
+                            <input type="number" class="form-control" id="discount_amount" name="discount_amount" value="0" step="0.01" onchange="calculateTotal()">
+                        </div>
+                    </div>
+
+                    <div class="row mb-3">
+                        <div class="col-md-12">
+                            <label for="notes" class="form-label">Notes</label>
+                            <textarea class="form-control" id="notes" name="notes" rows="3" placeholder="Additional notes or terms..."></textarea>
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-12">
+                            <button type="submit" class="btn btn-primary" name="action" value="save_draft">
+                                <i class="fas fa-save"></i> Save as Draft
+                            </button>
+                            <button type="submit" class="btn btn-success" name="action" value="send">
+                                <i class="fas fa-paper-plane"></i> Create & Send
+                            </button>
+                            <a href="{{ url_for('quotation.list_quotations') }}" class="btn btn-secondary">
+                                <i class="fas fa-times"></i> Cancel
+                            </a>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">Summary</h5>
+            </div>
+            <div class="card-body">
+                <div class="row mb-3">
+                    <div class="col-6">Subtotal:</div>
+                    <div class="col-6 text-end"><strong id="subtotal">₹0.00</strong></div>
+                </div>
+                <div class="row mb-3">
+                    <div class="col-6">Tax Amount:</div>
+                    <div class="col-6 text-end"><strong id="tax-amount">₹0.00</strong></div>
+                </div>
+                <div class="row mb-3">
+                    <div class="col-6">Discount:</div>
+                    <div class="col-6 text-end"><strong id="discount-shown">₹0.00</strong></div>
+                </div>
+                <hr>
+                <div class="row">
+                    <div class="col-6"><h5>Total:</h5></div>
+                    <div class="col-6 text-end"><h5 id="total-amount" class="text-primary">₹0.00</h5></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function addQuotationRow() {
+    const container = document.getElementById('quotation-items');
+    const rowCount = container.children.length;
+    const newRow = document.createElement('div');
+    newRow.className = 'row mb-2 quotation-item-row';
+    newRow.innerHTML = `
+        <div class="col-md-5">
+            <select class="form-control item-product" name="item_product_id" onchange="updateItemPrice(this)" required>
+                <option value="">-- Select Product --</option>
+                {% for product in products %}
+                <option value="{{ product.id }}" data-price="{{ product.selling_price }}">{{ product.name }} ({{ product.sku }})</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="col-md-2">
+            <input type="number" class="form-control" name="item_quantity" placeholder="Qty" min="1" value="1" onchange="calculateTotal()">
+        </div>
+        <div class="col-md-3">
+            <input type="number" class="form-control" name="item_price" placeholder="Price" step="0.01" readonly>
+        </div>
+        <div class="col-md-2">
+            <button type="button" class="btn btn-sm btn-danger" onclick="removeQuotationRow(this)">
+                <i class="fas fa-trash"></i>
+            </button>
+        </div>
+    `;
+    container.appendChild(newRow);
+}
+
+function removeQuotationRow(btn) {
+    btn.closest('.quotation-item-row').remove();
+    calculateTotal();
+}
+
+function updateItemPrice(select) {
+    const option = select.selectedOptions[0];
+    const price = option.dataset.price || 0;
+    select.closest('.quotation-item-row').querySelector('[name="item_price"]').value = price;
+    calculateTotal();
+}
+
+function calculateTotal() {
+    let subtotal = 0;
+    document.querySelectorAll('.quotation-item-row').forEach(row => {
+        const quantity = parseFloat(row.querySelector('[name="item_quantity"]').value) || 0;
+        const price = parseFloat(row.querySelector('[name="item_price"]').value) || 0;
+        subtotal += quantity * price;
+    });
+    
+    const taxPercent = parseFloat(document.getElementById('tax_percent').value) || 0;
+    const discountAmount = parseFloat(document.getElementById('discount_amount').value) || 0;
+    const tax = subtotal * (taxPercent / 100);
+    const total = subtotal + tax - discountAmount;
+    
+    document.getElementById('subtotal').textContent = '₹' + subtotal.toFixed(2);
+    document.getElementById('tax-amount').textContent = '₹' + tax.toFixed(2);
+    document.getElementById('discount-shown').textContent = '₹' + discountAmount.toFixed(2);
+    document.getElementById('total-amount').textContent = '₹' + total.toFixed(2);
+}
+
+function loadCustomerDetails() {
+    const select = document.getElementById('customer_id');
+    const option = select.selectedOptions[0];
+    document.getElementById('customer_name').value = option.text.split('(')[0].trim();
+}
+
+// Set default valid until date (30 days from today)
+document.addEventListener('DOMContentLoaded', function() {
+    const today = new Date();
+    const validUntil = new Date(today.getTime() + 30 * 24 * 60 * 60 * 1000);
+    document.getElementById('valid_until').valueAsDate = validUntil;
+});
+</script>
+{% endblock %}

@@ -1,0 +1,130 @@
+{% extends "base.html" %}
+
+{% block title %}View Quotation - Medical Store Invoicing System{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-md-8">
+        <h1>Quotation #{{ quotation.quotation_number }}</h1>
+    </div>
+    <div class="col-md-4 text-end">
+        <button class="btn btn-secondary" onclick="window.print()">
+            <i class="fas fa-print"></i> Print
+        </button>
+        <a href="{{ url_for('quotation.export_quotation_pdf', quotation_id=quotation.id) }}" class="btn btn-danger">
+            <i class="fas fa-file-pdf"></i> Export PDF
+        </a>
+        <a href="{{ url_for('quotation.list_quotations') }}" class="btn btn-secondary">
+            <i class="fas fa-arrow-left"></i> Back
+        </a>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-body">
+                <div class="row mb-4">
+                    <div class="col-md-6">
+                        <h6 class="text-muted">Customer</h6>
+                        <h5>{{ quotation.customer_name }}</h5>
+                        {% if quotation.customer %}
+                        <p class="text-muted">
+                            {{ quotation.customer.phone }}<br>
+                            {{ quotation.customer.email }}<br>
+                            {{ quotation.customer.address }}
+                        </p>
+                        {% endif %}
+                    </div>
+                    <div class="col-md-6">
+                        <div class="row">
+                            <div class="col-6">
+                                <h6 class="text-muted">Quotation Date</h6>
+                                <p>{{ quotation.quotation_date.strftime('%d-%m-%Y') }}</p>
+                            </div>
+                            <div class="col-6">
+                                <h6 class="text-muted">Valid Until</h6>
+                                <p>{{ quotation.valid_until.strftime('%d-%m-%Y') }}</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <table class="table table-bordered">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Product</th>
+                            <th style="width: 80px;">Qty</th>
+                            <th style="width: 120px;">Unit Price</th>
+                            <th style="width: 120px;">Total</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item in quotation.items %}
+                        <tr>
+                            <td>{{ item.product_name }}</td>
+                            <td>{{ item.quantity }}</td>
+                            <td>₹{{ "%.2f"|format(item.unit_price) }}</td>
+                            <td>₹{{ "%.2f"|format(item.quantity * item.unit_price) }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+
+                {% if quotation.notes %}
+                <div class="alert alert-light border">
+                    <h6 class="text-muted">Notes</h6>
+                    <p>{{ quotation.notes }}</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">Summary</h5>
+            </div>
+            <div class="card-body">
+                <div class="row mb-3">
+                    <div class="col-6">Subtotal:</div>
+                    <div class="col-6 text-end">₹{{ "%.2f"|format(quotation.subtotal) }}</div>
+                </div>
+                <div class="row mb-3">
+                    <div class="col-6">Tax ({{ quotation.tax_percent }}%):</div>
+                    <div class="col-6 text-end">₹{{ "%.2f"|format(quotation.tax_amount) }}</div>
+                </div>
+                <div class="row mb-3">
+                    <div class="col-6">Discount:</div>
+                    <div class="col-6 text-end">₹{{ "%.2f"|format(quotation.discount_amount) }}</div>
+                </div>
+                <hr>
+                <div class="row">
+                    <div class="col-6"><h5>Total:</h5></div>
+                    <div class="col-6 text-end"><h5 class="text-primary">₹{{ "%.2f"|format(quotation.total_amount) }}</h5></div>
+                </div>
+                
+                <hr>
+                <h6 class="text-muted">Status</h6>
+                {% if quotation.status == 'draft' %}
+                    <span class="badge bg-secondary w-100 py-2">DRAFT</span>
+                {% elif quotation.status == 'sent' %}
+                    <span class="badge bg-info w-100 py-2">SENT</span>
+                {% elif quotation.status == 'accepted' %}
+                    <span class="badge bg-success w-100 py-2">ACCEPTED</span>
+                {% elif quotation.status == 'rejected' %}
+                    <span class="badge bg-danger w-100 py-2">REJECTED</span>
+                {% elif quotation.status == 'expired' %}
+                    <span class="badge bg-warning w-100 py-2">EXPIRED</span>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<style media="print">
+    .no-print { display: none !important; }
+    body { background: white; }
+</style>
+{% endblock %}

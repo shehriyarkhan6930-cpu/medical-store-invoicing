@@ -1,0 +1,539 @@
+{% extends "base.html" %}
+
+{% block title %}Admin Dashboard - Medical Store Invoicing System{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-md-12">
+        <h1 class="mb-0">Admin Dashboard</h1>
+        <p class="text-muted">System administration and user management</p>
+    </div>
+</div>
+
+<!-- Admin Stats -->
+<div class="row mb-4">
+    <div class="col-md-3 mb-3">
+        <div class="card">
+            <div class="card-body text-center">
+                <i class="fas fa-users fa-3x text-primary mb-3"></i>
+                <h5 class="card-title">Total Users</h5>
+                <h2 class="text-primary">{{ total_users }}</h2>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3 mb-3">
+        <div class="card">
+            <div class="card-body text-center">
+                <i class="fas fa-lock fa-3x text-warning mb-3"></i>
+                <h5 class="card-title">Admin Users</h5>
+                <h2 class="text-warning">{{ admin_count }}</h2>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3 mb-3">
+        <div class="card">
+            <div class="card-body text-center">
+                <i class="fas fa-user-clock fa-3x text-info mb-3"></i>
+                <h5 class="card-title">Active Users</h5>
+                <h2 class="text-info">{{ active_users }}</h2>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3 mb-3">
+        <div class="card">
+            <div class="card-body text-center">
+                <i class="fas fa-database fa-3x text-success mb-3"></i>
+                <h5 class="card-title">Database Size</h5>
+                <h2 class="text-success">{{ db_size }} MB</h2>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- User Management Tabs -->
+<div class="row">
+    <div class="col-md-12">
+        <ul class="nav nav-tabs" id="adminTabs" role="tablist">
+            <li class="nav-item" role="presentation">
+                <button class="nav-link active" id="users-tab" data-bs-toggle="tab" data-bs-target="#users-panel" type="button">Manage Users</button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="suppliers-tab" data-bs-toggle="tab" data-bs-target="#suppliers-panel" type="button">Manage Suppliers</button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="backup-tab" data-bs-toggle="tab" data-bs-target="#backup-panel" type="button">Backup & Restore</button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="logs-tab" data-bs-toggle="tab" data-bs-target="#logs-panel" type="button">System Logs</button>
+            </li>
+        </ul>
+
+        <div class="tab-content" id="adminTabContent">
+            <!-- Users Management -->
+            <div class="tab-pane fade show active" id="users-panel" role="tabpanel">
+                <div class="card mt-3">
+                    <div class="card-header">
+                        <div class="row align-items-center">
+                            <div class="col-md-8">
+                                <input type="text" class="form-control" id="userSearch" placeholder="Search users...">
+                            </div>
+                            <div class="col-md-4 text-end">
+                                <a href="#" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addUserModal">
+                                    <i class="fas fa-plus"></i> Add New User
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="table-responsive">
+                        <table class="table table-hover mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Username</th>
+                                    <th>Email</th>
+                                    <th>Role</th>
+                                    <th>Status</th>
+                                    <th>Created</th>
+                                    <th>Last Activity</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for user in users %}
+                                <tr>
+                                    <td><strong>{{ user.username }}</strong></td>
+                                    <td>{{ user.email }}</td>
+                                    <td>
+                                        <span class="badge {% if user.role == 'admin' %}bg-danger{% elif user.role == 'manager' %}bg-warning{% else %}bg-info{% endif %}">
+                                            {{ user.role.upper() }}
+                                        </span>
+                                    </td>
+                                    <td>
+                                        {% if user.is_active %}
+                                            <span class="badge bg-success">Active</span>
+                                        {% else %}
+                                            <span class="badge bg-secondary">Inactive</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>{{ user.created_at.strftime('%d-%m-%Y') }}</td>
+                                    <td>{{ user.updated_at.strftime('%d-%m-%Y %H:%M') }}</td>
+                                    <td>
+                                        <button class="btn btn-sm btn-info" data-bs-toggle="modal" data-bs-target="#editUserModal" onclick="loadUserData('{{ user.id }}')"
+                                            title="Edit">
+                                            <i class="fas fa-edit"></i>
+                                        </button>
+                                        <button class="btn btn-sm btn-{% if user.is_active %}warning{% else %}success{% endif %}" onclick="toggleUserStatus('{{ user.id }}')"
+                                            title="{% if user.is_active %}Deactivate{% else %}Activate{% endif %}">
+                                            <i class="fas fa-{% if user.is_active %}ban{% else %}check{% endif %}"></i>
+                                        </button>
+                                        <button class="btn btn-sm btn-danger" onclick="deleteUser('{{ user.id }}')"
+                                            title="Delete">
+                                            <i class="fas fa-trash"></i>
+                                        </button>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Suppliers Management -->
+            <div class="tab-pane fade" id="suppliers-panel" role="tabpanel">
+                <div class="card mt-3">
+                    <div class="card-header">
+                        <div class="row align-items-center">
+                            <div class="col-md-8">
+                                <input type="text" class="form-control" id="supplierSearch" placeholder="Search suppliers...">
+                            </div>
+                            <div class="col-md-4 text-end">
+                                <a href="#" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addSupplierModal">
+                                    <i class="fas fa-plus"></i> Add Supplier
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="table-responsive">
+                        <table class="table table-hover mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Supplier Name</th>
+                                    <th>Contact Person</th>
+                                    <th>Phone</th>
+                                    <th>Email</th>
+                                    <th>City</th>
+                                    <th>Status</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for supplier in suppliers %}
+                                <tr>
+                                    <td><strong>{{ supplier.name }}</strong></td>
+                                    <td>{{ supplier.contact_person }}</td>
+                                    <td>{{ supplier.phone }}</td>
+                                    <td>{{ supplier.email }}</td>
+                                    <td>{{ supplier.city }}</td>
+                                    <td>
+                                        {% if supplier.is_active %}
+                                            <span class="badge bg-success">Active</span>
+                                        {% else %}
+                                            <span class="badge bg-secondary">Inactive</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <button class="btn btn-sm btn-info" onclick="editSupplier('{{ supplier.id }}')" title="Edit">
+                                            <i class="fas fa-edit"></i>
+                                        </button>
+                                        <button class="btn btn-sm btn-danger" onclick="deleteSupplier('{{ supplier.id }}')" title="Delete">
+                                            <i class="fas fa-trash"></i>
+                                        </button>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Backup & Restore -->
+            <div class="tab-pane fade" id="backup-panel" role="tabpanel">
+                <div class="row mt-3">
+                    <div class="col-md-6">
+                        <div class="card">
+                            <div class="card-header bg-success text-white">
+                                <h5 class="mb-0"><i class="fas fa-download"></i> Backup Database</h5>
+                            </div>
+                            <div class="card-body">
+                                <p>Create a backup of the entire database for safety and recovery purposes.</p>
+                                <button class="btn btn-success" onclick="backupDatabase()">
+                                    <i class="fas fa-cloud-download-alt"></i> Create Backup Now
+                                </button>
+                                <div id="backupStatus" class="mt-3"></div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="card">
+                            <div class="card-header bg-warning text-white">
+                                <h5 class="mb-0"><i class="fas fa-upload"></i> Restore Database</h5>
+                            </div>
+                            <div class="card-body">
+                                <p>Restore database from a previously created backup file.</p>
+                                <input type="file" class="form-control mb-3" id="backupFile" accept=".db">
+                                <button class="btn btn-warning" onclick="restoreDatabase()">
+                                    <i class="fas fa-cloud-upload-alt"></i> Restore Backup
+                                </button>
+                                <div id="restoreStatus" class="mt-3"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="row mt-3">
+                    <div class="col-md-12">
+                        <div class="card">
+                            <div class="card-header">
+                                <h5 class="mb-0">Backup History</h5>
+                            </div>
+                            <div class="table-responsive">
+                                <table class="table mb-0">
+                                    <thead class="table-light">
+                                        <tr>
+                                            <th>Backup File</th>
+                                            <th>Created</th>
+                                            <th>File Size</th>
+                                            <th>Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {% for backup in backup_files %}
+                                        <tr>
+                                            <td>{{ backup.name }}</td>
+                                            <td>{{ backup.created }}</td>
+                                            <td>{{ backup.size }}</td>
+                                            <td>
+                                                <a href="/admin/download-backup/{{ backup.name }}" class="btn btn-sm btn-success">
+                                                    <i class="fas fa-download"></i>
+                                                </a>
+                                                <button class="btn btn-sm btn-danger" onclick="deleteBackup('{{ backup.name }}')">
+                                                    <i class="fas fa-trash"></i>
+                                                </button>
+                                            </td>
+                                        </tr>
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- System Logs -->
+            <div class="tab-pane fade" id="logs-panel" role="tabpanel">
+                <div class="card mt-3">
+                    <div class="card-header">
+                        <div class="row">
+                            <div class="col-md-8">
+                                <input type="text" class="form-control" id="logSearch" placeholder="Search logs...">
+                            </div>
+                            <div class="col-md-4 text-end">
+                                <button class="btn btn-danger" onclick="clearLogs()">
+                                    <i class="fas fa-trash"></i> Clear Logs
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="table-responsive">
+                        <table class="table table-sm mb-0 font-monospace">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Timestamp</th>
+                                    <th>User</th>
+                                    <th>Action</th>
+                                    <th>Details</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for log in system_logs %}
+                                <tr>
+                                    <td>{{ log.created_at.strftime('%d-%m-%Y %H:%M:%S') }}</td>
+                                    <td>{{ log.user_name }}</td>
+                                    <td><span class="badge bg-info">{{ log.action }}</span></td>
+                                    <td><small>{{ log.details }}</small></td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Add User Modal -->
+<div class="modal fade" id="addUserModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title">Add New User</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="POST" action="{{ url_for('admin.add_user') }}">
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="username" class="form-label">Username</label>
+                        <input type="text" class="form-control" name="username" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="email" class="form-label">Email</label>
+                        <input type="email" class="form-control" name="email" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="password" class="form-label">Password</label>
+                        <input type="password" class="form-control" name="password" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="role" class="form-label">Role</label>
+                        <select class="form-control" name="role" required>
+                            <option value="staff">Staff</option>
+                            <option value="manager">Manager</option>
+                            <option value="admin">Admin</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Create User</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Add Supplier Modal -->
+<div class="modal fade" id="addSupplierModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title">Add New Supplier</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="POST" action="{{ url_for('admin.add_supplier') }}">
+                <div class="modal-body">
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Supplier Name</label>
+                            <input type="text" class="form-control" name="name" required>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Contact Person</label>
+                            <input type="text" class="form-control" name="contact_person" required>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Phone</label>
+                            <input type="tel" class="form-control" name="phone" required>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Email</label>
+                            <input type="email" class="form-control" name="email" required>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Address</label>
+                        <textarea class="form-control" name="address" rows="2"></textarea>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">City</label>
+                            <input type="text" class="form-control" name="city">
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">State</label>
+                            <input type="text" class="form-control" name="state">
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Add Supplier</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Edit User Modal -->
+<div class="modal fade" id="editUserModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-info text-white">
+                <h5 class="modal-title">Edit User</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="POST" id="editUserForm">
+                <div class="modal-body">
+                    <input type="hidden" id="edit_user_id" name="user_id">
+                    <div class="mb-3">
+                        <label class="form-label">Username</label>
+                        <input type="text" class="form-control" id="edit_username" readonly>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Email</label>
+                        <input type="email" class="form-control" id="edit_email" name="email" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Role</label>
+                        <select class="form-control" id="edit_role" name="role" required>
+                            <option value="staff">Staff</option>
+                            <option value="manager">Manager</option>
+                            <option value="admin">Admin</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-info">Update User</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+function loadUserData(userId) {
+    fetch(`/admin/get-user/${userId}`)
+        .then(response => response.json())
+        .then(data => {
+            document.getElementById('edit_user_id').value = data.id;
+            document.getElementById('edit_username').value = data.username;
+            document.getElementById('edit_email').value = data.email;
+            document.getElementById('edit_role').value = data.role;
+        });
+}
+
+function toggleUserStatus(userId) {
+    fetch(`/admin/toggle-user/${userId}`, {method: 'POST'})
+        .then(response => {
+            if (response.ok) location.reload();
+        });
+}
+
+function deleteUser(userId) {
+    if (confirm('Are you sure you want to delete this user?')) {
+        fetch(`/admin/delete-user/${userId}`, {method: 'POST'})
+            .then(response => {
+                if (response.ok) location.reload();
+            });
+    }
+}
+
+function deleteSupplier(supplierId) {
+    if (confirm('Are you sure you want to delete this supplier?')) {
+        fetch(`/admin/delete-supplier/${supplierId}`, {method: 'POST'})
+            .then(response => {
+                if (response.ok) location.reload();
+            });
+    }
+}
+
+function backupDatabase() {
+    const btn = event.target;
+    btn.disabled = true;
+    btn.textContent = 'Creating backup...';
+    
+    fetch('/admin/backup-database', {method: 'POST'})
+        .then(response => response.json())
+        .then(data => {
+            document.getElementById('backupStatus').innerHTML = `<div class="alert alert-success">${data.message}</div>`;
+            btn.disabled = false;
+            btn.textContent = 'Create Backup Now';
+            setTimeout(() => location.reload(), 1500);
+        })
+        .catch(error => {
+            document.getElementById('backupStatus').innerHTML = `<div class="alert alert-danger">Backup failed</div>`;
+            btn.disabled = false;
+            btn.textContent = 'Create Backup Now';
+        });
+}
+
+function restoreDatabase() {
+    const fileInput = document.getElementById('backupFile');
+    if (!fileInput.files[0]) {
+        alert('Please select a backup file');
+        return;
+    }
+    
+    if (!confirm('Are you sure you want to restore from this backup? Current data will be replaced.')) {
+        return;
+    }
+    
+    const formData = new FormData();
+    formData.append('backup_file', fileInput.files[0]);
+    
+    fetch('/admin/restore-database', {method: 'POST', body: formData})
+        .then(response => response.json())
+        .then(data => {
+            document.getElementById('restoreStatus').innerHTML = `<div class="alert alert-success">${data.message}</div>`;
+            setTimeout(() => location.reload(), 1500);
+        })
+        .catch(error => {
+            document.getElementById('restoreStatus').innerHTML = `<div class="alert alert-danger">Restore failed</div>`;
+        });
+}
+
+function clearLogs() {
+    if (confirm('Are you sure you want to clear all system logs?')) {
+        fetch('/admin/clear-logs', {method: 'POST'})
+            .then(response => {
+                if (response.ok) location.reload();
+            });
+    }
+}
+</script>
+{% endblock %}
